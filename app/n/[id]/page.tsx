@@ -1,7 +1,11 @@
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getNote, getChildren } from "@/data/notes";
-import ReadOnlyContent from "./read-only-content";
+
+const ReadOnlyContent = dynamic(() => import("./read-only-content"), {
+  ssr: false,
+});
 
 /**
  * Read-only note view. This is the public page users see when scanning

@@ -1,7 +1,9 @@
+import dynamic from "next/dynamic";
 import { notFound } from "next/navigation";
 import { getNote } from "@/data/notes";
-import NoteEditor from "./note-editor";
 import { QRLabel } from "@/lib/components/qr-label";
+
+const NoteEditor = dynamic(() => import("./note-editor"), { ssr: false });
 
 /**
  * Server page for editing a note. Fetches the note by UUID from
