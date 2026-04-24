@@ -1,0 +1,153 @@
+"use client";
+
+import "@blocknote/react/style.css";
+import "@blocknote/mantine/style.css";
+
+import { useState, useCallback, useRef, useEffect } from "react";
+import { useCreateBlockNote } from "@blocknote/react";
+import { BlockNoteView } from "@blocknote/mantine";
+import { type Note } from "@/lib/db/schema";
+import { updateNote } from "@/app/actions/notes";
+
+/** Debounce delay in milliseconds before auto-saving. */
+const DEBOUNCE_MS = 1000;
+
+/** Duration to show "Saved" indicator before resetting to idle. */
+const SAVED_DISPLAY_MS = 2000;
+
+/** Save indicator states for the auto-save lifecycle. */
+type SaveStatus = "idle" | "saving" | "saved";
+
+/**
+ * NoteEditor provides a rich-text editing experience using BlockNote.
+ * It auto-saves the note title and content after a debounced delay,
+ * with a visual save status indicator.
+ *
+ * @param props.note - The note to edit, fetched server-side.
+ */
+export default function NoteEditor({ note }: { note: Note }) {
+  const [title, setTitle] = useState(note.title);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+
+  /** Ref to hold the latest debounce timer so it can be cleared on new edits. */
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** Ref to hold the "saved" display timer. */
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** Ref to track the latest title for use in the editor onChange callback. */
+  const titleRef = useRef(title);
+  useEffect(() => {
+    titleRef.current = title;
+  }, [title]);
+
+  /** Cast JSONB content to BlockNote's expected PartialBlock[] format. */
+  const editor = useCreateBlockNote({
+    initialContent:
+      note.content && note.content.length > 0
+        ? (note.content as NonNullable<
+            Parameters<typeof useCreateBlockNote>[0]
+          >["initialContent"])
+        : undefined,
+  });
+
+  /**
+   * Persists the current title and editor content to the server.
+   * Manages the save status indicator lifecycle: idle -> saving -> saved -> idle.
+   */
+  const save = useCallback(
+    async (currentTitle: string) => {
+      setSaveStatus("saving");
+
+      try {
+        await updateNote(note.id, {
+          title: currentTitle,
+          content: editor.document as Record<string, unknown>[],
+        });
+        setSaveStatus("saved");
+
+        if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+        savedTimerRef.current = setTimeout(() => {
+          setSaveStatus("idle");
+        }, SAVED_DISPLAY_MS);
+      } catch {
+        setSaveStatus("idle");
+      }
+    },
+    [note.id, editor]
+  );
+
+  /**
+   * Schedules an auto-save after the debounce delay.
+   * Cancels any pending save to restart the timer on each edit.
+   */
+  const scheduleSave = useCallback(
+    (currentTitle: string) => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        save(currentTitle);
+      }, DEBOUNCE_MS);
+    },
+    [save]
+  );
+
+  /** Handles title input changes and triggers debounced auto-save. */
+  const handleTitleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const newTitle = e.target.value;
+      setTitle(newTitle);
+      scheduleSave(newTitle);
+    },
+    [scheduleSave]
+  );
+
+  /** Handles BlockNote editor content changes and triggers debounced auto-save. */
+  const handleEditorChange = useCallback(() => {
+    scheduleSave(titleRef.current);
+  }, [scheduleSave]);
+
+  /** Clean up timers on unmount. */
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    };
+  }, []);
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Title bar with icon and save indicator */}
+      <div className="flex items-center gap-3">
+        {note.icon && (
+          <span className="text-3xl" role="img" aria-label="Note icon">
+            {note.icon}
+          </span>
+        )}
+        <input
+          type="text"
+          value={title}
+          onChange={handleTitleChange}
+          placeholder="Untitled"
+          className="flex-1 bg-transparent text-2xl font-bold text-gray-900 outline-none placeholder:text-gray-400 dark:text-gray-100 dark:placeholder:text-gray-500"
+          aria-label="Note title"
+        />
+        <span
+          className={`text-sm transition-opacity ${
+            saveStatus === "idle"
+              ? "opacity-0"
+              : "opacity-100 text-gray-500 dark:text-gray-400"
+          }`}
+          aria-live="polite"
+        >
+          {saveStatus === "saving" && "Saving..."}
+          {saveStatus === "saved" && "Saved"}
+        </span>
+      </div>
+
+      {/* BlockNote rich-text editor */}
+      <div className="min-h-[300px] rounded-lg border border-gray-200 dark:border-gray-700">
+        <BlockNoteView editor={editor} onChange={handleEditorChange} />
+      </div>
+    </div>
+  );
+}
