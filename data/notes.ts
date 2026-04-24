@@ -264,3 +264,20 @@ export async function moveNote(
     return updated ?? null;
   }
 }
+
+/**
+ * Fetches direct children of a note, ordered by the order field.
+ * @param parentId - The parent note's UUID.
+ * @param dbInstance - Database instance (defaults to production singleton).
+ * @returns Array of child notes.
+ */
+export async function getChildren(
+  parentId: string,
+  dbInstance: Database = defaultDb
+): Promise<Note[]> {
+  return dbInstance
+    .select()
+    .from(notes)
+    .where(eq(notes.parentId, parentId))
+    .orderBy(asc(notes.order));
+}

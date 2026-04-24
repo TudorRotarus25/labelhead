@@ -7,6 +7,7 @@ import {
   deleteNote,
   getNoteTree,
   moveNote,
+  getChildren,
 } from "@/data/notes";
 
 beforeEach(async () => {
@@ -399,5 +400,26 @@ describe("moveNote", () => {
     await expect(
       moveNote(parent.id, grandchild.id, 0, testDb)
     ).rejects.toThrow(/circular/i);
+  });
+});
+
+describe("getChildren", () => {
+  it("should return direct children ordered by order field", async () => {
+    const parent = await createNote({ title: "Parent" }, testDb);
+    await createNote({ title: "Second", parentId: parent.id, order: 1 }, testDb);
+    await createNote({ title: "First", parentId: parent.id, order: 0 }, testDb);
+    await createNote({ title: "Unrelated" }, testDb);
+
+    const children = await getChildren(parent.id, testDb);
+
+    expect(children).toHaveLength(2);
+    expect(children[0].title).toBe("First");
+    expect(children[1].title).toBe("Second");
+  });
+
+  it("should return empty array when no children exist", async () => {
+    const note = await createNote({ title: "Lonely" }, testDb);
+    const children = await getChildren(note.id, testDb);
+    expect(children).toHaveLength(0);
   });
 });

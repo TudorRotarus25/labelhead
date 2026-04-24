@@ -8,6 +8,7 @@ import {
   deleteNote as dalDeleteNote,
   getNoteTree as dalGetNoteTree,
   moveNote as dalMoveNote,
+  getChildren as dalGetChildren,
 } from "@/data/notes";
 import { type Note, type NewNote, type NoteTreeNode } from "@/lib/db/schema";
 
@@ -63,6 +64,15 @@ export async function deleteNote(id: string): Promise<void> {
  */
 export async function getNoteTree(): Promise<NoteTreeNode[]> {
   return dalGetNoteTree();
+}
+
+/**
+ * Server action: fetches direct children of a note.
+ * @param parentId - The parent note's UUID.
+ * @returns Array of child notes ordered by order field.
+ */
+export async function getChildren(parentId: string): Promise<Note[]> {
+  return dalGetChildren(parentId);
 }
 
 /**
