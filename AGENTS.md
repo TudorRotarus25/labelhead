@@ -9,3 +9,4 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - Keep the components small with a clear single responsibility. If a component grows too large, break it down into smaller components.
 - Never commit secrets, like the DB connection string, to version control. Use environment variables instead.
 - Always write documentation for your code. Use JSDoc comments to explain the purpose of functions
+- Use Claude agent teams to parallelise work when it makes sense and things can be delegated. 
