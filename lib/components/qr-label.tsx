@@ -18,27 +18,24 @@ export function QRLabel({
   noteId: string;
   noteTitle: string;
 }) {
-  const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
-  const [loading, setLoading] = useState(true);
+  const [canShare, setCanShare] = useState(false);
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    setCanShare(typeof navigator.share === "function");
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
 
     async function render() {
-      setLoading(true);
+      setDataUrl(null);
       const canvas = await generateQRLabel(noteId, noteTitle);
       if (cancelled) return;
 
       canvasRef.current = canvas;
-
-      // Mount the canvas in the container
-      if (containerRef.current) {
-        containerRef.current.innerHTML = "";
-        containerRef.current.appendChild(canvas);
-      }
-      setLoading(false);
+      setDataUrl(canvas.toDataURL("image/png"));
     }
 
     render();
@@ -77,12 +74,15 @@ export function QRLabel({
 
   return (
     <div className="flex items-center gap-4">
-      <div
-        ref={containerRef}
-        className="shrink-0 overflow-hidden rounded border border-gray-200 dark:border-gray-700"
-        aria-label="QR code label"
-      >
-        {loading && (
+      <div className="shrink-0 overflow-hidden rounded border border-gray-200 dark:border-gray-700">
+        {dataUrl ? (
+          <img
+            src={dataUrl}
+            alt="QR code label"
+            width={200}
+            height={250}
+          />
+        ) : (
           <div className="flex h-[250px] w-[200px] items-center justify-center text-sm text-gray-400">
             Generating...
           </div>

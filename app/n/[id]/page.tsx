@@ -1,11 +1,7 @@
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getNote, getChildren } from "@/data/notes";
-
-const ReadOnlyContent = dynamic(() => import("./read-only-content"), {
-  ssr: false,
-});
+import ReadOnlyContentLoader from "./read-only-content-loader";
 
 /**
  * Read-only note view. This is the public page users see when scanning
@@ -48,7 +44,7 @@ export default async function ReadOnlyNotePage({
 
       {/* Note content in read-only BlockNote viewer */}
       <div className="min-h-[200px] rounded-lg border border-gray-200 dark:border-gray-700">
-        <ReadOnlyContent content={note.content ?? []} />
+        <ReadOnlyContentLoader content={note.content ?? []} />
       </div>
 
       {/* Sub-notes section */}

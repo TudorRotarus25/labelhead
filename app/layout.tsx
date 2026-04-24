@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { getNoteTree } from "@/data/notes";
-import { SidebarLayout } from "@/lib/components/sidebar/sidebar-layout";
+import { Sidebar } from "@/lib/components/sidebar/sidebar";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,6 +19,12 @@ export const metadata: Metadata = {
   description: "QR code note-taking app",
 };
 
+/**
+ * Root layout with sidebar and main content as siblings.
+ * The sidebar is a client component that manages its own mobile toggle.
+ * {children} stays in the server component tree — never passed through
+ * a client component — to avoid React hydration conflicts with BlockNote.
+ */
 export default async function RootLayout({
   children,
 }: Readonly<{
@@ -31,8 +37,9 @@ export default async function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
-        <SidebarLayout tree={tree}>{children}</SidebarLayout>
+      <body className="flex h-full min-h-screen">
+        <Sidebar tree={tree} />
+        <main className="flex-1 overflow-y-auto">{children}</main>
       </body>
     </html>
   );
