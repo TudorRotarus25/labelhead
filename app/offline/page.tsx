@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 /**
  * Offline fallback page displayed when the user has no network connection
  * and the requested page is not cached by the service worker.
@@ -9,12 +11,12 @@ export default function OfflinePage() {
       <p className="mt-2 text-zinc-600">
         Previously viewed notes are available from the sidebar.
       </p>
-      <a
+      <Link
         href="/"
         className="mt-6 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800"
       >
         Go to home
-      </a>
+      </Link>
     </div>
   );
 }

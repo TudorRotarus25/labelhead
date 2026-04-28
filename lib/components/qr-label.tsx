@@ -1,7 +1,28 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+  useSyncExternalStore,
+} from "react";
 import { generateQRLabel, canvasToBlob } from "./qr-label-utils";
+
+/** No-op subscriber — `navigator.share` availability is static per session. */
+function subscribeNoop() {
+  return () => {};
+}
+
+/** Client snapshot: true when the Web Share API is available. */
+function getCanShareSnapshot() {
+  return typeof navigator !== "undefined" && typeof navigator.share === "function";
+}
+
+/** Server snapshot: Web Share API is never available during SSR. */
+function getCanShareServerSnapshot() {
+  return false;
+}
 
 /**
  * QRLabel displays a QR code label for a note, with download and share actions.
@@ -19,12 +40,12 @@ export function QRLabel({
   noteTitle: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [canShare, setCanShare] = useState(false);
+  const canShare = useSyncExternalStore(
+    subscribeNoop,
+    getCanShareSnapshot,
+    getCanShareServerSnapshot,
+  );
   const [dataUrl, setDataUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    setCanShare(typeof navigator.share === "function");
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,6 +97,9 @@ export function QRLabel({
     <div className="flex items-center gap-4">
       <div className="shrink-0 overflow-hidden rounded border border-gray-200 dark:border-gray-700">
         {dataUrl ? (
+          // The QR label is a client-generated data URL with known fixed
+          // dimensions; next/image cannot optimize an inline data URL.
+          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={dataUrl}
             alt="QR code label"

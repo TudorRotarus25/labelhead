@@ -47,14 +47,16 @@ export function ScannerView() {
   const lastDetectedIdRef = useRef<string | null>(null);
   const lastDetectedTimeRef = useRef<number>(0);
 
-  const [state, setState] = useState<ScannerState>("idle");
+  const [state, setState] = useState<ScannerState>("requesting_permission");
   const [detected, setDetected] = useState<DetectedNote | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(false);
 
-  /** Starts the camera and begins scanning. */
-  const startCamera = useCallback(async () => {
-    setState("requesting_permission");
-
+  /**
+   * Requests camera access and attaches the stream to the video element.
+   * Called from the mount effect and from the retry button. Sets component
+   * state based on whether the user grants or denies camera permission.
+   */
+  const attachCameraStream = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment" },
@@ -63,7 +65,9 @@ export function ScannerView() {
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+        // iOS Safari can leave play()'s promise pending even while the stream
+        // renders. Fire-and-forget so the decode loop arms regardless.
+        videoRef.current.play().catch(() => {});
       }
 
       setState("scanning");
@@ -92,7 +96,18 @@ export function ScannerView() {
   const decodeFrame = useCallback(async () => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    if (!video || !canvas || video.readyState < video.HAVE_ENOUGH_DATA) return;
+    // iOS Safari often plateaus readyState at HAVE_CURRENT_DATA (2) for
+    // getUserMedia streams, so HAVE_ENOUGH_DATA (4) is too strict. Gate on
+    // actual frame dimensions instead — that's what drawImage/jsQR require.
+    if (
+      !video ||
+      !canvas ||
+      video.readyState < video.HAVE_CURRENT_DATA ||
+      video.videoWidth === 0 ||
+      video.videoHeight === 0
+    ) {
+      return;
+    }
 
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) return;
@@ -120,8 +135,16 @@ export function ScannerView() {
     lastDetectedIdRef.current = noteId;
     lastDetectedTimeRef.current = now;
 
-    // Fetch note data
-    const note = await getNote(noteId);
+    // Fetch note data. Wrap in try/catch because this runs inside a
+    // setInterval callback — an unhandled rejection here is invisible and
+    // looks identical to "nothing happened".
+    let note: Awaited<ReturnType<typeof getNote>>;
+    try {
+      note = await getNote(noteId);
+    } catch (err) {
+      console.error("[scanner] getNote failed", err);
+      return;
+    }
     if (!note) return;
 
     const preview = extractPreview(
@@ -145,11 +168,14 @@ export function ScannerView() {
     }, OVERLAY_DURATION_MS);
   }, []);
 
-  // Start camera on mount, clean up on unmount
+  // Start camera on mount, clean up on unmount. The Promise returned by
+  // `attachCameraStream` is intentionally unhandled here — it uses its own
+  // try/catch to drive state transitions in async callbacks.
   useEffect(() => {
-    startCamera();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- state transitions occur in async Promise callbacks, not synchronously in the effect body.
+    void attachCameraStream();
     return stopCamera;
-  }, [startCamera, stopCamera]);
+  }, [attachCameraStream, stopCamera]);
 
   // Start decode loop when scanning
   useEffect(() => {
@@ -208,7 +234,10 @@ export function ScannerView() {
           </p>
           <button
             type="button"
-            onClick={() => startCamera()}
+            onClick={() => {
+              setState("requesting_permission");
+              attachCameraStream();
+            }}
             className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-100"
           >
             Try again
