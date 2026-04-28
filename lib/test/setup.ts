@@ -1,11 +1,7 @@
-import dotenv from "dotenv";
 import { sql } from "drizzle-orm";
 import { createDb, type Database } from "@/lib/db";
 
-dotenv.config({ path: ".env.test.local" });
-dotenv.config({ path: ".env.local" });
-
-/** Shared test database instance. */
+/** Shared test database instance. Connects to the testcontainer started by globalSetup. */
 export const testDb: Database = createDb(process.env.DATABASE_URL);
 
 /**

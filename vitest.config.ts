@@ -6,8 +6,10 @@ export default defineConfig({
     globals: true,
     environment: "node",
     include: ["**/*.test.ts", "**/*.test.tsx"],
+    globalSetup: ["./lib/test/global-setup.ts"],
     setupFiles: ["./lib/test/setup.ts"],
     testTimeout: 30000,
+    hookTimeout: 60000,
   },
   resolve: {
     alias: {
