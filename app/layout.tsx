@@ -4,6 +4,8 @@ import { cookies } from "next/headers";
 import "./globals.css";
 import { getNoteTree } from "@/data/notes";
 import { Sidebar } from "@/lib/components/sidebar/sidebar";
+import { MobileTabBar } from "@/lib/components/mobile-tab-bar";
+import { SidebarProvider } from "@/lib/components/sidebar-context";
 import { AUTH_COOKIE, verifyToken } from "@/lib/auth";
 
 const geistSans = Geist({
@@ -33,14 +35,15 @@ export const metadata: Metadata = {
 };
 
 export const viewport = {
-  themeColor: "#18181b",
+  themeColor: "#ffffff",
 };
 
 /**
  * Root layout with sidebar and main content as siblings.
- * The sidebar is a client component that manages its own mobile toggle.
- * {children} stays in the server component tree — never passed through
- * a client component — to avoid React hydration conflicts with BlockNote.
+ * The sidebar is a client component that manages its own drawer state via
+ * SidebarContext. MobileTabBar (bottom nav) toggles the drawer on mobile.
+ * {children} stays in the server component tree — never passed through a
+ * client component — to avoid React hydration conflicts with BlockNote.
  */
 export default async function RootLayout({
   children,
@@ -62,8 +65,19 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex h-full min-h-screen">
-        {authed && <Sidebar tree={tree} />}
-        <main className="flex-1 overflow-y-auto">{children}</main>
+        {authed ? (
+          <SidebarProvider>
+            <Sidebar tree={tree} />
+            <main className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-16 md:pb-0">
+              {children}
+            </main>
+            <MobileTabBar />
+          </SidebarProvider>
+        ) : (
+          <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+            {children}
+          </main>
+        )}
       </body>
     </html>
   );

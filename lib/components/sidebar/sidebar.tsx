@@ -1,35 +1,37 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 import { createNote, updateNote, moveNote } from "@/app/actions/notes";
 import { type NoteTreeNode } from "@/lib/db/schema";
+import { useSidebar } from "@/lib/components/sidebar-context";
 import { SidebarTreeNode } from "./sidebar-tree-node";
 import { SidebarDndContext } from "./sidebar-dnd-context";
 import { flattenTree } from "./dnd/flatten-tree";
 
 /**
- * Sidebar with built-in mobile toggle. Renders the note tree,
- * create/icon actions, drag-and-drop reordering, and handles
- * its own open/close state.
- * On desktop (md+) the sidebar is always visible.
- * On mobile it starts collapsed with a floating hamburger button.
+ * Renders the note tree sidebar. On desktop (md+) it's always visible.
+ * On mobile it slides in as a drawer; its open/close state lives in
+ * SidebarContext so the MobileTabBar can toggle it.
  */
 export function Sidebar({ tree }: { tree: NoteTreeNode[] }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const { open, setOpen } = useSidebar();
 
   const flatNodes = useMemo(() => flattenTree(tree), [tree]);
 
   async function handleNewNote() {
     const note = await createNote({});
+    setOpen(false);
     router.push(`/n/${note.id}/edit`);
     router.refresh();
   }
 
   async function handleNewChild(parentId: string) {
     const note = await createNote({ parentId });
+    setOpen(false);
     router.push(`/n/${note.id}/edit`);
     router.refresh();
   }
@@ -51,22 +53,10 @@ export function Sidebar({ tree }: { tree: NoteTreeNode[] }) {
 
   return (
     <>
-      {/* Mobile hamburger — visible only when sidebar is closed */}
-      <button
-        type="button"
-        aria-label="Open sidebar"
-        className="fixed left-3 top-3 z-30 flex h-9 w-9 items-center justify-center rounded-md bg-white text-zinc-700 shadow-md md:hidden dark:bg-zinc-800 dark:text-zinc-200"
-        onClick={() => setOpen(true)}
-      >
-        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
-      </button>
-
       {/* Mobile overlay */}
       {open && (
         <div
-          className="fixed inset-0 z-40 bg-black/40 md:hidden"
+          className="fixed inset-0 z-40 bg-black/30 md:hidden"
           onClick={() => setOpen(false)}
           aria-hidden="true"
         />
@@ -79,27 +69,53 @@ export function Sidebar({ tree }: { tree: NoteTreeNode[] }) {
           md:static md:translate-x-0 md:transition-none
           ${open ? "translate-x-0" : "-translate-x-full"}
         `}
+        aria-label="Sidebar"
       >
-        <nav className="flex h-full flex-col bg-zinc-50 dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
-          <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
-            <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-              LabelHead
-            </h1>
-            <div className="flex items-center gap-1.5">
+        <nav className="flex h-full flex-col border-r border-[var(--border)] bg-white">
+          <div className="flex flex-col gap-3 border-b border-[var(--border)] px-4 py-4">
+            {/* Row 1: logo + wordmark */}
+            <div className="flex min-w-0 items-center gap-3">
+              <Image
+                src="/logo.png"
+                alt=""
+                width={44}
+                height={44}
+                className="shrink-0"
+                priority
+              />
+              <span className="text-lg font-semibold tracking-tight text-black">
+                LabelHead
+              </span>
+            </div>
+            {/* Row 2: primary actions (Scan + New note) */}
+            <div className="flex items-stretch gap-2">
               <Link
                 href="/scan"
                 aria-label="Scan QR code"
-                className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-200 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+                onClick={() => setOpen(false)}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-[var(--radius)] border border-[var(--border)] px-2.5 py-2 text-xs font-medium text-gray-700 transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
               >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" />
+                  <line x1="14" y1="14" x2="14" y2="14.01" />
+                  <line x1="20" y1="14" x2="20" y2="14.01" />
+                  <line x1="14" y1="20" x2="14" y2="20.01" />
+                  <line x1="20" y1="20" x2="20" y2="20.01" />
+                  <line x1="17" y1="17" x2="17" y2="17.01" />
                 </svg>
+                Scan
               </Link>
               <button
                 type="button"
                 onClick={handleNewNote}
-                className="rounded-md bg-zinc-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-[var(--radius)] bg-[var(--accent)] px-2.5 py-2 text-xs font-medium text-white transition hover:bg-[var(--accent-hover)]"
               >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
                 New note
               </button>
             </div>
@@ -107,7 +123,7 @@ export function Sidebar({ tree }: { tree: NoteTreeNode[] }) {
 
           <div className="flex-1 overflow-y-auto px-2 py-2">
             {tree.length === 0 ? (
-              <p className="px-2 py-4 text-center text-xs text-zinc-400">
+              <p className="px-2 py-4 text-center text-xs text-gray-400">
                 No notes yet
               </p>
             ) : (
@@ -119,6 +135,7 @@ export function Sidebar({ tree }: { tree: NoteTreeNode[] }) {
                     depth={0}
                     onNewChild={handleNewChild}
                     onSetIcon={handleSetIcon}
+                    onNavigate={() => setOpen(false)}
                   />
                 ))}
               </SidebarDndContext>

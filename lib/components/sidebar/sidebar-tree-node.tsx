@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useDroppable } from "@dnd-kit/core";
 import { type NoteTreeNode as NoteTreeNodeType } from "@/lib/db/schema";
 import { SidebarDropIndicator } from "./sidebar-drop-indicator";
@@ -17,6 +18,12 @@ interface SidebarTreeNodeProps {
   onNewChild: (parentId: string) => void;
   /** Callback to set the emoji icon for this node. */
   onSetIcon: (noteId: string, icon: string | null) => void;
+  /**
+   * Called when the user navigates to this note via the title link. Sidebar
+   * uses this to close the mobile drawer after a selection. Optional so
+   * direct unit tests can render a node without wiring the drawer context.
+   */
+  onNavigate?: () => void;
   /** Drag handle listeners from parent (provided by useDraggable). */
   dragHandleProps?: Record<string, unknown>;
 }
@@ -24,16 +31,23 @@ interface SidebarTreeNodeProps {
 /**
  * Renders a single node in the sidebar note tree with expand/collapse,
  * emoji icon, title link, add-child button, and drag-and-drop support.
+ * Top-level (root) nodes render their title as an uppercase tracked section
+ * header; nested notes render in regular sentence case.
  */
 export function SidebarTreeNode({
   node,
   depth,
   onNewChild,
   onSetIcon,
+  onNavigate,
 }: SidebarTreeNodeProps) {
   const [expanded, setExpanded] = useState(true);
+  const pathname = usePathname();
   const hasChildren = node.children.length > 0;
   const displayIcon = node.icon ?? "📄";
+  const isRoot = depth === 0;
+  const isActive =
+    pathname === `/n/${node.id}` || pathname === `/n/${node.id}/edit`;
 
   const { setNodeRef } = useDroppable({ id: node.id });
   const dropState = useDndDropState();
@@ -58,10 +72,11 @@ export function SidebarTreeNode({
 
       <div
         className={`
-          group flex items-center gap-1 py-0.5 pr-2 text-sm text-zinc-700
-          hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800 rounded-md
+          group flex items-center gap-1 rounded-md py-1 pr-2 text-sm text-gray-700
+          hover:bg-gray-50
+          ${isActive ? "bg-[var(--accent-soft)] text-[var(--accent)] font-medium" : ""}
           ${isDragging ? "opacity-40" : ""}
-          ${isDropOnTarget ? "ring-2 ring-blue-500 rounded-md" : ""}
+          ${isDropOnTarget ? "ring-2 ring-[var(--accent)]" : ""}
         `}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
       >
@@ -70,7 +85,7 @@ export function SidebarTreeNode({
           type="button"
           aria-label="Drag to reorder"
           data-testid={`drag-handle-${node.id}`}
-          className="flex h-5 w-4 shrink-0 cursor-grab items-center justify-center rounded text-zinc-300 opacity-0 group-hover:opacity-100 hover:text-zinc-500 active:cursor-grabbing dark:text-zinc-600 dark:hover:text-zinc-400"
+          className="flex h-5 w-4 shrink-0 cursor-grab items-center justify-center rounded text-gray-300 opacity-0 group-hover:opacity-100 hover:text-gray-500 active:cursor-grabbing"
           onPointerDown={(e) => {
             // Allow default so @dnd-kit PointerSensor picks it up
             e.stopPropagation();
@@ -97,7 +112,7 @@ export function SidebarTreeNode({
           <button
             type="button"
             aria-label="Toggle children"
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-400 hover:text-gray-600"
             onClick={() => setExpanded((prev) => !prev)}
           >
             {expanded ? "▾" : "▸"}
@@ -110,7 +125,7 @@ export function SidebarTreeNode({
         <button
           type="button"
           aria-label="Change icon"
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-sm hover:bg-zinc-200 dark:hover:bg-zinc-700"
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-sm hover:bg-gray-100"
           onClick={handleIconClick}
         >
           {displayIcon}
@@ -119,7 +134,8 @@ export function SidebarTreeNode({
         {/* Title as navigation link */}
         <Link
           href={`/n/${node.id}/edit`}
-          className="min-w-0 flex-1 truncate hover:underline"
+          onClick={onNavigate}
+          className={`min-w-0 flex-1 truncate hover:underline ${isRoot ? "uppercase-tracked" : ""}`}
         >
           {node.title || "Untitled"}
         </Link>
@@ -128,7 +144,7 @@ export function SidebarTreeNode({
         <button
           type="button"
           aria-label="Add child note"
-          className="ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded text-zinc-400 opacity-0 group-hover:opacity-100 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+          className="ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-gray-100 hover:text-gray-600"
           onClick={() => onNewChild(node.id)}
         >
           +
@@ -150,6 +166,7 @@ export function SidebarTreeNode({
               depth={depth + 1}
               onNewChild={onNewChild}
               onSetIcon={onSetIcon}
+              onNavigate={onNavigate}
             />
           ))}
         </div>

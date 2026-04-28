@@ -1,9 +1,20 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { useEffect } from "react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { Sidebar } from "../sidebar";
 import { SidebarTreeNode } from "../sidebar-tree-node";
+import { SidebarProvider, useSidebar } from "@/lib/components/sidebar-context";
 import { type NoteTreeNode } from "@/lib/db/schema";
+
+/** Wrap Sidebar in its required context for tests. */
+function renderSidebar(tree: NoteTreeNode[]) {
+  return render(
+    <SidebarProvider>
+      <Sidebar tree={tree} />
+    </SidebarProvider>
+  );
+}
 
 /** Mock server actions to avoid actual DB calls. */
 vi.mock("@/app/actions/notes", () => ({
@@ -53,7 +64,7 @@ describe("Sidebar", () => {
   });
 
   it("renders the 'New note' button", () => {
-    render(<Sidebar tree={[]} />);
+    renderSidebar([]);
     expect(screen.getByRole("button", { name: /new note/i })).toBeTruthy();
   });
 
@@ -62,7 +73,7 @@ describe("Sidebar", () => {
       makeNode({ id: "1", title: "First Note" }),
       makeNode({ id: "2", title: "Second Note" }),
     ];
-    render(<Sidebar tree={tree} />);
+    renderSidebar(tree);
     expect(screen.getByText("First Note")).toBeTruthy();
     expect(screen.getByText("Second Note")).toBeTruthy();
   });
@@ -71,7 +82,7 @@ describe("Sidebar", () => {
     const tree: NoteTreeNode[] = [
       makeNode({ id: "1", title: "Work", icon: "💼" }),
     ];
-    render(<Sidebar tree={tree} />);
+    renderSidebar(tree);
     expect(screen.getByText("💼")).toBeTruthy();
   });
 
@@ -85,19 +96,43 @@ describe("Sidebar", () => {
         ],
       }),
     ];
-    render(<Sidebar tree={tree} />);
+    renderSidebar(tree);
     expect(screen.getByText("Parent Note")).toBeTruthy();
     expect(screen.getByText("Child Note")).toBeTruthy();
   });
 
   it("shows empty state when no notes exist", () => {
-    render(<Sidebar tree={[]} />);
+    renderSidebar([]);
     expect(screen.getByText(/no notes yet/i)).toBeTruthy();
   });
 
   it("renders the LabelHead header", () => {
-    render(<Sidebar tree={[]} />);
+    renderSidebar([]);
     expect(screen.getByText("LabelHead")).toBeTruthy();
+  });
+
+  it("closes the mobile drawer when a tree-node link is clicked", () => {
+    function Probe() {
+      const { open, setOpen } = useSidebar();
+      useEffect(() => {
+        setOpen(true);
+      }, [setOpen]);
+      return <div data-testid="drawer-state">{open ? "open" : "closed"}</div>;
+    }
+
+    render(
+      <SidebarProvider>
+        <Sidebar tree={[makeNode({ id: "n1", title: "Click Me" })]} />
+        <Probe />
+      </SidebarProvider>
+    );
+
+    // Drawer opens synchronously via the probe effect.
+    expect(screen.getByTestId("drawer-state").textContent).toBe("open");
+
+    // Clicking the note title link should close it.
+    fireEvent.click(screen.getByRole("link", { name: /click me/i }));
+    expect(screen.getByTestId("drawer-state").textContent).toBe("closed");
   });
 });
 

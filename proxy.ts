@@ -8,7 +8,7 @@ import { AUTH_COOKIE, verifyToken } from "@/lib/auth";
  * where they were aiming.
  *
  * Excluded paths (see `config.matcher`): /login, /offline, Next.js internals,
- * the service worker, manifest, icons, favicon.
+ * the service worker, manifest, icons, logo, favicon.
  */
 export async function proxy(request: NextRequest) {
   const secret = process.env.SITE_AUTH_SECRET;
@@ -28,6 +28,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!login|offline|_next/static|_next/image|_next/data|manifest\\.json|sw\\.js|icon.*\\.png|apple-icon.*\\.png|favicon\\.ico).*)",
+    "/((?!login|offline|_next/static|_next/image|_next/data|manifest\\.json|sw\\.js|icon.*\\.png|apple-icon.*\\.png|apple-touch-icon\\.png|logo\\.png|favicon\\.ico|icons/).*)",
   ],
 };

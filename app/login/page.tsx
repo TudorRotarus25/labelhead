@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { LoginForm } from "./login-form";
 
 /**
@@ -17,10 +18,23 @@ export default async function LoginPage({
     : "/";
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center px-8 py-16">
-      <div className="mb-8 text-center">
-        <h1 className="text-3xl font-semibold text-zinc-100">LabelHead</h1>
-        <p className="mt-2 text-sm text-zinc-400">Enter the password to continue.</p>
+    <div className="flex min-h-screen flex-1 flex-col items-center justify-center bg-white px-8 py-16">
+      <div className="mb-8 flex flex-col items-center gap-4 text-center">
+        <Image
+          src="/logo.png"
+          alt="LabelHead"
+          width={56}
+          height={56}
+          priority
+        />
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight text-black">
+            LabelHead
+          </h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Enter the password to continue.
+          </p>
+        </div>
       </div>
       <LoginForm next={next} />
     </div>

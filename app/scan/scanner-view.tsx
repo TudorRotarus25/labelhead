@@ -276,7 +276,7 @@ export function ScannerView() {
                   {detected.preview}
                 </p>
               )}
-              <p className="mt-1 text-xs text-blue-600">Tap to open</p>
+              <p className="mt-1 text-xs font-medium text-[var(--accent)]">Tap to open</p>
             </div>
           </div>
         </button>

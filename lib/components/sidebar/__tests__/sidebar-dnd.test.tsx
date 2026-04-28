@@ -2,7 +2,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { Sidebar } from "../sidebar";
+import { SidebarProvider } from "@/lib/components/sidebar-context";
 import { type NoteTreeNode } from "@/lib/db/schema";
+
+/** Wrap Sidebar in its required context for tests. */
+function renderSidebar(tree: NoteTreeNode[]) {
+  return render(
+    <SidebarProvider>
+      <Sidebar tree={tree} />
+    </SidebarProvider>
+  );
+}
 
 /** Mock server actions to avoid actual DB calls. */
 vi.mock("@/app/actions/notes", () => ({
@@ -57,7 +67,7 @@ describe("Sidebar DnD integration", () => {
       makeNode({ id: "node-1", title: "Note One" }),
       makeNode({ id: "node-2", title: "Note Two" }),
     ];
-    render(<Sidebar tree={tree} />);
+    renderSidebar(tree);
 
     expect(screen.getByTestId("drag-handle-node-1")).toBeTruthy();
     expect(screen.getByTestId("drag-handle-node-2")).toBeTruthy();
@@ -67,7 +77,7 @@ describe("Sidebar DnD integration", () => {
     const tree: NoteTreeNode[] = [
       makeNode({ id: "abc", title: "My Note" }),
     ];
-    render(<Sidebar tree={tree} />);
+    renderSidebar(tree);
 
     const handle = screen.getByTestId("drag-handle-abc");
     expect(handle.getAttribute("aria-label")).toBe("Drag to reorder");
@@ -77,7 +87,7 @@ describe("Sidebar DnD integration", () => {
     const tree: NoteTreeNode[] = [
       makeNode({ id: "node-x", title: "Node X" }),
     ];
-    render(<Sidebar tree={tree} />);
+    renderSidebar(tree);
 
     const nodeEl = document.querySelector('[data-node-id="node-x"]');
     expect(nodeEl).toBeTruthy();
@@ -93,7 +103,7 @@ describe("Sidebar DnD integration", () => {
         ],
       }),
     ];
-    render(<Sidebar tree={tree} />);
+    renderSidebar(tree);
 
     expect(screen.getByTestId("drag-handle-parent")).toBeTruthy();
     expect(screen.getByTestId("drag-handle-child")).toBeTruthy();
@@ -103,7 +113,7 @@ describe("Sidebar DnD integration", () => {
     const tree: NoteTreeNode[] = [
       makeNode({ id: "a", title: "Note A" }),
     ];
-    render(<Sidebar tree={tree} />);
+    renderSidebar(tree);
 
     expect(screen.queryByTestId("drop-indicator")).toBeNull();
   });
@@ -112,7 +122,7 @@ describe("Sidebar DnD integration", () => {
     const tree: NoteTreeNode[] = [
       makeNode({ id: "1", title: "My Note", icon: "🚀" }),
     ];
-    render(<Sidebar tree={tree} />);
+    renderSidebar(tree);
 
     // Title renders
     expect(screen.getByText("My Note")).toBeTruthy();

@@ -21,7 +21,8 @@ type SaveStatus = "idle" | "saving" | "saved";
 /**
  * NoteEditor provides a rich-text editing experience using BlockNote.
  * It auto-saves the note title and content after a debounced delay,
- * with a visual save status indicator.
+ * with a visual save status indicator. The editor fills its parent's
+ * height so clicks below the last block still focus the editor.
  *
  * @param props.note - The note to edit, fetched server-side.
  */
@@ -106,6 +107,18 @@ export default function NoteEditor({ note }: { note: Note }) {
     scheduleSave(titleRef.current);
   }, [scheduleSave]);
 
+  /** Clicking the empty space below the last block should focus the editor. */
+  const handleEditorContainerClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      // Only grab clicks that land on the wrapper itself, not on an existing
+      // block or UI affordance.
+      if (e.target === e.currentTarget) {
+        editor.focus();
+      }
+    },
+    [editor]
+  );
+
   /** Clean up timers on unmount. */
   useEffect(() => {
     return () => {
@@ -115,7 +128,7 @@ export default function NoteEditor({ note }: { note: Note }) {
   }, []);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex h-full min-h-0 flex-col gap-4">
       {/* Title bar with icon and save indicator */}
       <div className="flex items-center gap-3">
         {note.icon && (
@@ -128,25 +141,40 @@ export default function NoteEditor({ note }: { note: Note }) {
           value={title}
           onChange={handleTitleChange}
           placeholder="Untitled"
-          className="flex-1 bg-transparent text-2xl font-bold text-gray-900 outline-none placeholder:text-gray-400 dark:text-gray-100 dark:placeholder:text-gray-500"
+          className="flex-1 bg-transparent text-2xl font-bold text-black outline-none placeholder:text-[var(--text-dim)]"
           aria-label="Note title"
         />
         <span
-          className={`text-sm transition-opacity ${
+          className={`text-xs transition-opacity ${
             saveStatus === "idle"
               ? "opacity-0"
-              : "opacity-100 text-gray-500 dark:text-gray-400"
+              : "flex items-center gap-1.5 text-[var(--text-muted)] opacity-100"
           }`}
           aria-live="polite"
         >
-          {saveStatus === "saving" && "Saving..."}
-          {saveStatus === "saved" && "Saved"}
+          {saveStatus === "saving" && "Saving…"}
+          {saveStatus === "saved" && (
+            <>
+              <span
+                className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--accent)]"
+                aria-hidden="true"
+              />
+              Saved
+            </>
+          )}
         </span>
       </div>
 
-      {/* BlockNote rich-text editor */}
-      <div className="min-h-[300px] rounded-lg border border-gray-200 dark:border-gray-700">
-        <BlockNoteView editor={editor} onChange={handleEditorChange} />
+      {/* BlockNote rich-text editor — fills remaining vertical space. */}
+      <div
+        className="min-h-0 flex-1 cursor-text"
+        onClick={handleEditorContainerClick}
+      >
+        <BlockNoteView
+          editor={editor}
+          onChange={handleEditorChange}
+          theme="light"
+        />
       </div>
     </div>
   );

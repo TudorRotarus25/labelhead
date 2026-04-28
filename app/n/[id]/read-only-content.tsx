@@ -24,6 +24,8 @@ export default function ReadOnlyContent({
   });
 
   return (
-    <BlockNoteView editor={editor} editable={false} theme="light" />
+    <div className="h-full">
+      <BlockNoteView editor={editor} editable={false} theme="light" />
+    </div>
   );
 }

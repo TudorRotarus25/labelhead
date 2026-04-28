@@ -16,7 +16,7 @@ export function LoginForm({ next }: { next: string }) {
   return (
     <form action={formAction} className="flex w-full max-w-sm flex-col gap-4">
       <input type="hidden" name="next" value={next} />
-      <label className="flex flex-col gap-2 text-sm text-zinc-400">
+      <label className="flex flex-col gap-2 text-sm text-gray-600">
         Password
         <input
           type="password"
@@ -24,18 +24,18 @@ export function LoginForm({ next }: { next: string }) {
           autoFocus
           autoComplete="current-password"
           required
-          className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-base text-zinc-100 outline-none focus:border-zinc-500"
+          className="rounded-[var(--radius)] border border-[var(--border)] bg-white px-3 py-2.5 text-base text-black outline-none transition focus:border-[var(--accent)]"
         />
       </label>
       {state.error ? (
-        <p className="text-sm text-red-400" role="alert">
+        <p className="text-sm text-[var(--danger)]" role="alert">
           {state.error}
         </p>
       ) : null}
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-900 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+        className="rounded-[var(--radius)] bg-[var(--accent)] px-3 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-60"
       >
         {pending ? "Unlocking…" : "Unlock"}
       </button>
