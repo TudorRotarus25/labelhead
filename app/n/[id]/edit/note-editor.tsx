@@ -4,11 +4,14 @@ import "@blocknote/react/style.css";
 import "@blocknote/mantine/style.css";
 
 import { useState, useCallback, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import { type Note } from "@/lib/db/schema";
-import { updateNote } from "@/app/actions/notes";
+import { updateNote, deleteNote } from "@/app/actions/notes";
 import { IconButton } from "@/lib/components/icon-picker/icon-button";
+import { NoteMenu } from "@/lib/components/note-menu/note-menu";
+import { ConfirmDialog } from "@/lib/components/confirm-dialog/confirm-dialog";
 
 /** Debounce delay in milliseconds before auto-saving. */
 const DEBOUNCE_MS = 1000;
@@ -28,9 +31,11 @@ type SaveStatus = "idle" | "saving" | "saved";
  * @param props.note - The note to edit, fetched server-side.
  */
 export default function NoteEditor({ note }: { note: Note }) {
+  const router = useRouter();
   const [title, setTitle] = useState(note.title);
   const [icon, setIcon] = useState<string | null>(note.icon);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   /** Ref to hold the latest debounce timer so it can be cleared on new edits. */
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -152,6 +157,17 @@ export default function NoteEditor({ note }: { note: Note }) {
     };
   }, []);
 
+  /**
+   * Confirms deletion of the note: closes the dialog, calls the server action,
+   * and navigates to the parent note (or the home page for root-level notes).
+   */
+  const handleConfirmDelete = useCallback(async () => {
+    setConfirmOpen(false);
+    await deleteNote(note.id);
+    router.push(note.parentId ? `/n/${note.parentId}` : "/");
+    router.refresh();
+  }, [note.id, note.parentId, router]);
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
       {/* Title bar with icon and save indicator */}
@@ -189,6 +205,7 @@ export default function NoteEditor({ note }: { note: Note }) {
             </>
           )}
         </span>
+        <NoteMenu onDelete={() => setConfirmOpen(true)} />
       </div>
 
       {/* BlockNote rich-text editor — fills remaining vertical space. */}
@@ -202,6 +219,15 @@ export default function NoteEditor({ note }: { note: Note }) {
           theme="light"
         />
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Delete note?"
+        message="This cannot be undone. Sub-notes will be moved to this note's parent."
+        confirmLabel="Delete"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </div>
   );
 }

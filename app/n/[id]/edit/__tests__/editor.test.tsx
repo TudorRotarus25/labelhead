@@ -2,8 +2,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import NoteEditor from "../note-editor";
-import { updateNote } from "@/app/actions/notes";
+import { updateNote, deleteNote } from "@/app/actions/notes";
 import { type Note } from "@/lib/db/schema";
+
+/** Shared router mock — individual tests read its push/refresh mocks. */
+const routerMock = {
+  push: vi.fn(),
+  refresh: vi.fn(),
+};
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => routerMock,
+}));
 
 /**
  * Mock the emoji-mart picker used by IconButton. The real Picker mounts a
@@ -46,9 +56,10 @@ vi.mock("@blocknote/mantine", () => ({
 vi.mock("@blocknote/react/style.css", () => ({}));
 vi.mock("@blocknote/mantine/style.css", () => ({}));
 
-/** Mock the server action to avoid actual DB calls. */
+/** Mock the server actions to avoid actual DB calls. */
 vi.mock("@/app/actions/notes", () => ({
   updateNote: vi.fn().mockResolvedValue(null),
+  deleteNote: vi.fn().mockResolvedValue(undefined),
 }));
 
 /** Factory for a minimal Note fixture. */
@@ -138,5 +149,67 @@ describe("NoteEditor", () => {
     render(<NoteEditor note={note} />);
     const titleInput = screen.getByPlaceholderText("Untitled");
     expect(titleInput).toBeTruthy();
+  });
+
+  describe("delete flow", () => {
+    it("opens the confirm dialog when selecting Delete from the kebab menu", () => {
+      const note = makeNote();
+      render(<NoteEditor note={note} />);
+
+      fireEvent.click(screen.getByRole("button", { name: /note actions/i }));
+      fireEvent.click(screen.getByRole("menuitem", { name: /delete note/i }));
+
+      expect(screen.getByRole("dialog")).toBeTruthy();
+      expect(screen.getByText(/delete note\?/i)).toBeTruthy();
+    });
+
+    it("calls deleteNote and navigates to the parent note on confirm", async () => {
+      const note = makeNote({
+        id: "child-1",
+        parentId: "parent-1",
+      });
+      render(<NoteEditor note={note} />);
+
+      fireEvent.click(screen.getByRole("button", { name: /note actions/i }));
+      fireEvent.click(screen.getByRole("menuitem", { name: /delete note/i }));
+      fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+      await waitFor(() =>
+        expect(deleteNote).toHaveBeenCalledWith("child-1")
+      );
+      expect(routerMock.push).toHaveBeenCalledWith("/n/parent-1");
+      expect(routerMock.refresh).toHaveBeenCalled();
+    });
+
+    it("navigates to home when deleting a root-level note", async () => {
+      const note = makeNote({
+        id: "root-1",
+        parentId: null,
+      });
+      render(<NoteEditor note={note} />);
+
+      fireEvent.click(screen.getByRole("button", { name: /note actions/i }));
+      fireEvent.click(screen.getByRole("menuitem", { name: /delete note/i }));
+      fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+      await waitFor(() =>
+        expect(deleteNote).toHaveBeenCalledWith("root-1")
+      );
+      expect(routerMock.push).toHaveBeenCalledWith("/");
+      expect(routerMock.refresh).toHaveBeenCalled();
+    });
+
+    it("dismisses the dialog on Cancel without deleting", () => {
+      const note = makeNote();
+      render(<NoteEditor note={note} />);
+
+      fireEvent.click(screen.getByRole("button", { name: /note actions/i }));
+      fireEvent.click(screen.getByRole("menuitem", { name: /delete note/i }));
+      fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(deleteNote).not.toHaveBeenCalled();
+      expect(routerMock.push).not.toHaveBeenCalled();
+    });
   });
 });
