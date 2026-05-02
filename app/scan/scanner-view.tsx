@@ -5,37 +5,33 @@ import { useRouter } from "next/navigation";
 import jsQR from "jsqr";
 import { parseLabelHeadUrl } from "@/lib/scanner/parse-labelhead-url";
 import { extractPreview } from "@/lib/scanner/extract-preview";
+import { hapticTap } from "@/lib/scanner/haptic";
 import { getNote } from "@/app/actions/notes";
+import { ScanCameraPanel } from "./scan-camera-panel";
+import { ScanNotePanel, type ScanNoteData } from "./scan-note-panel";
 
 /** Scanner state machine states. */
 type ScannerState =
   | "idle"
   | "requesting_permission"
   | "scanning"
+  | "loading"
   | "detected"
   | "permission_denied";
-
-/** Data for a detected note shown in the overlay. */
-interface DetectedNote {
-  id: string;
-  title: string;
-  icon: string | null;
-  preview: string;
-}
 
 /** Decode interval in milliseconds (~7 fps). */
 const DECODE_INTERVAL_MS = 150;
 
-/** How long the overlay stays visible (ms). */
-const OVERLAY_DURATION_MS = 3000;
-
-/** Cooldown before the same QR code triggers a new fetch (ms). */
-const SAME_QR_COOLDOWN_MS = 3000;
+/** How long the detection-confirmed feedback animation plays. */
+const FEEDBACK_DURATION_MS = 600;
 
 /**
- * Full-screen QR scanner with camera feed and detection overlay.
- * Uses getUserMedia for the camera, draws frames to a hidden canvas,
- * and decodes QR codes with jsQR at throttled intervals.
+ * Full-screen QR scanner with a 50/50 vertical split: camera feed on top,
+ * note content on bottom. Uses getUserMedia for the camera, draws frames
+ * to a hidden canvas, and decodes QR codes with jsQR at throttled intervals.
+ *
+ * The note panel is sticky — it stays visible until a different LabelHead QR
+ * is scanned, so users can pause mid-workflow without losing context.
  */
 export function ScannerView() {
   const router = useRouter();
@@ -43,18 +39,17 @@ export function ScannerView() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const decodeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const overlayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastDetectedIdRef = useRef<string | null>(null);
-  const lastDetectedTimeRef = useRef<number>(0);
+  const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inFlightIdRef = useRef<string | null>(null);
 
   const [state, setState] = useState<ScannerState>("requesting_permission");
-  const [detected, setDetected] = useState<DetectedNote | null>(null);
-  const [overlayVisible, setOverlayVisible] = useState(false);
+  const [detected, setDetected] = useState<ScanNoteData | null>(null);
+  const [showFeedback, setShowFeedback] = useState(false);
 
   /**
    * Requests camera access and attaches the stream to the video element.
-   * Called from the mount effect and from the retry button. Sets component
-   * state based on whether the user grants or denies camera permission.
+   * Sets component state based on whether the user grants or denies camera
+   * permission. Called on mount and from the retry button.
    */
   const attachCameraStream = useCallback(async () => {
     try {
@@ -82,9 +77,9 @@ export function ScannerView() {
       clearInterval(decodeTimerRef.current);
       decodeTimerRef.current = null;
     }
-    if (overlayTimerRef.current) {
-      clearTimeout(overlayTimerRef.current);
-      overlayTimerRef.current = null;
+    if (feedbackTimerRef.current) {
+      clearTimeout(feedbackTimerRef.current);
+      feedbackTimerRef.current = null;
     }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
@@ -123,17 +118,24 @@ export function ScannerView() {
     const noteId = parseLabelHeadUrl(code.data);
     if (!noteId) return; // Ignore non-LabelHead QR codes
 
-    // Debounce: skip if same QR within cooldown period
-    const now = Date.now();
-    if (
-      noteId === lastDetectedIdRef.current &&
-      now - lastDetectedTimeRef.current < SAME_QR_COOLDOWN_MS
-    ) {
+    // Swap-on-different: ignore the same QR while its note is already showing
+    // or being fetched, so the user isn't hammered with re-triggering feedback
+    // every frame while the camera lingers on the label.
+    if (noteId === detected?.id || noteId === inFlightIdRef.current) {
       return;
     }
 
-    lastDetectedIdRef.current = noteId;
-    lastDetectedTimeRef.current = now;
+    // Fire feedback immediately — even before the network resolves — so the
+    // tap/haptic lines up with the moment the QR crosses the viewfinder.
+    inFlightIdRef.current = noteId;
+    hapticTap();
+    setShowFeedback(true);
+    setState("loading");
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+    feedbackTimerRef.current = setTimeout(
+      () => setShowFeedback(false),
+      FEEDBACK_DURATION_MS
+    );
 
     // Fetch note data. Wrap in try/catch because this runs inside a
     // setInterval callback — an unhandled rejection here is invisible and
@@ -143,9 +145,15 @@ export function ScannerView() {
       note = await getNote(noteId);
     } catch (err) {
       console.error("[scanner] getNote failed", err);
+      inFlightIdRef.current = null;
+      setState("scanning");
       return;
     }
-    if (!note) return;
+    inFlightIdRef.current = null;
+    if (!note) {
+      setState("scanning");
+      return;
+    }
 
     const preview = extractPreview(
       (note.content as Record<string, unknown>[]) ?? []
@@ -157,16 +165,8 @@ export function ScannerView() {
       icon: note.icon,
       preview,
     });
-    setOverlayVisible(true);
     setState("detected");
-
-    // Auto-fade overlay
-    if (overlayTimerRef.current) clearTimeout(overlayTimerRef.current);
-    overlayTimerRef.current = setTimeout(() => {
-      setOverlayVisible(false);
-      setState("scanning");
-    }, OVERLAY_DURATION_MS);
-  }, []);
+  }, [detected?.id]);
 
   // Start camera on mount, clean up on unmount. The Promise returned by
   // `attachCameraStream` is intentionally unhandled here — it uses its own
@@ -177,9 +177,14 @@ export function ScannerView() {
     return stopCamera;
   }, [attachCameraStream, stopCamera]);
 
-  // Start decode loop when scanning
+  // Start decode loop while the camera is active. "loading" and "detected"
+  // keep the loop running so the next distinct QR can swap the panel.
   useEffect(() => {
-    if (state === "scanning" || state === "detected") {
+    if (
+      state === "scanning" ||
+      state === "loading" ||
+      state === "detected"
+    ) {
       decodeTimerRef.current = setInterval(decodeFrame, DECODE_INTERVAL_MS);
       return () => {
         if (decodeTimerRef.current) {
@@ -191,121 +196,89 @@ export function ScannerView() {
   }, [state, decodeFrame]);
 
   /** Navigates to the detected note's read-only view. */
-  function handleOverlayTap() {
-    if (!detected) return;
+  const handleOpen = useCallback(
+    (noteId: string) => {
+      stopCamera();
+      router.push(`/n/${noteId}`);
+    },
+    [router, stopCamera]
+  );
+
+  /** Navigates to the detected note's edit view. */
+  const handleEdit = useCallback(
+    (noteId: string) => {
+      stopCamera();
+      router.push(`/n/${noteId}?edit=1`);
+    },
+    [router, stopCamera]
+  );
+
+  const handleBack = useCallback(() => {
     stopCamera();
-    router.push(`/n/${detected.id}`);
-  }
+    router.back();
+  }, [router, stopCamera]);
+
+  // Map the scanner state to the note panel's visual state.
+  const notePanelState =
+    state === "loading"
+      ? "loading"
+      : state === "detected"
+        ? "loaded"
+        : "idle";
 
   return (
-    <div className="relative h-full w-full bg-black" data-testid="scanner-view">
-      {/* Camera feed */}
-      <video
-        ref={videoRef}
-        className="h-full w-full object-cover"
-        playsInline
-        muted
-        data-testid="scanner-video"
-      />
+    <div
+      className="relative flex h-full w-full flex-col bg-black"
+      data-testid="scanner-view"
+    >
+      {/* Top half — camera */}
+      <div className="relative h-1/2 w-full">
+        <ScanCameraPanel
+          showFeedback={showFeedback}
+          onBack={handleBack}
+          videoRef={videoRef}
+        />
 
-      {/* Hidden canvas for frame extraction */}
-      <canvas ref={canvasRef} className="hidden" />
+        {/* Hidden canvas for frame extraction */}
+        <canvas ref={canvasRef} className="hidden" />
 
-      {/* Crosshair guide */}
-      {(state === "scanning" || state === "detected") && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className="h-48 w-48 rounded-2xl border-2 border-white/40" />
-        </div>
-      )}
-
-      {/* Permission denied state */}
-      {state === "permission_denied" && (
-        <div
-          className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/80 px-6 text-center"
-          data-testid="permission-denied"
-        >
-          <div className="text-4xl">📷</div>
-          <h2 className="text-lg font-semibold text-white">
-            Camera access required
-          </h2>
-          <p className="max-w-xs text-sm text-zinc-400">
-            LabelHead needs camera access to scan QR codes. Please enable camera
-            permissions in your browser settings and reload the page.
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              setState("requesting_permission");
-              attachCameraStream();
-            }}
-            className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-100"
+        {/* Permission denied overlay (covers the camera area only) */}
+        {state === "permission_denied" && (
+          <div
+            className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/85 px-6 text-center"
+            data-testid="permission-denied"
           >
-            Try again
-          </button>
-        </div>
-      )}
-
-      {/* Detection overlay */}
-      {detected && (
-        <button
-          type="button"
-          onClick={handleOverlayTap}
-          data-testid="detection-overlay"
-          className={`absolute bottom-6 left-4 right-4 rounded-xl bg-white/95 p-4 shadow-lg backdrop-blur-sm transition-all duration-300 ${
-            overlayVisible
-              ? "translate-y-0 opacity-100"
-              : "translate-y-4 opacity-0 pointer-events-none"
-          }`}
-        >
-          <div className="flex items-start gap-3">
-            <span className="text-2xl" data-testid="overlay-icon">
-              {detected.icon ?? "📄"}
-            </span>
-            <div className="min-w-0 flex-1 text-left">
-              <h3
-                className="truncate text-sm font-semibold text-zinc-900"
-                data-testid="overlay-title"
-              >
-                {detected.title}
-              </h3>
-              {detected.preview && (
-                <p
-                  className="mt-0.5 line-clamp-2 text-xs text-zinc-500"
-                  data-testid="overlay-preview"
-                >
-                  {detected.preview}
-                </p>
-              )}
-              <p className="mt-1 text-xs font-medium text-[var(--accent)]">Tap to open</p>
-            </div>
+            <div className="text-4xl">📷</div>
+            <h2 className="text-base font-semibold text-white">
+              Camera access required
+            </h2>
+            <p className="max-w-xs text-sm text-zinc-400">
+              LabelHead needs camera access to scan QR codes. Please enable
+              camera permissions in your browser settings and reload the page.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setState("requesting_permission");
+                attachCameraStream();
+              }}
+              className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-100"
+            >
+              Try again
+            </button>
           </div>
-        </button>
-      )}
+        )}
+      </div>
 
-      {/* Back button */}
-      <button
-        type="button"
-        onClick={() => {
-          stopCamera();
-          router.back();
-        }}
-        className="absolute left-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm hover:bg-black/70"
-        aria-label="Go back"
-      >
-        <svg
-          className="h-5 w-5"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M15 19l-7-7 7-7"
-          />
-        </svg>
-      </button>
+      {/* Bottom half — note panel */}
+      <div className="h-1/2 w-full">
+        <ScanNotePanel
+          state={notePanelState}
+          note={detected}
+          onOpen={handleOpen}
+          onEdit={handleEdit}
+        />
+      </div>
     </div>
   );
 }

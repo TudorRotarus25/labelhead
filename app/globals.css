@@ -56,3 +56,31 @@ body {
 .bn-container [class*="bn-block-content"] {
   padding-inline: 0;
 }
+
+/* Scanner detection feedback animations.
+   Fired for ~500ms when a LabelHead QR code is successfully parsed. */
+@keyframes scan-corner-burst {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+@keyframes scan-haptic {
+  0% { transform: translate(-50%, -50%) scale(0.6); opacity: 0.8; }
+  100% { transform: translate(-50%, -50%) scale(2.4); opacity: 0; }
+}
+@keyframes scan-check {
+  0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+  40% { transform: translate(-50%, -50%) scale(1.15); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+.animate-scan-corner-burst { animation: scan-corner-burst 0.5s ease-out; }
+.animate-scan-haptic { animation: scan-haptic 1.4s ease-out; }
+.animate-scan-check { animation: scan-check 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-scan-corner-burst,
+  .animate-scan-haptic,
+  .animate-scan-check {
+    animation: none;
+  }
+}
