@@ -8,6 +8,7 @@ import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import { type Note } from "@/lib/db/schema";
 import { updateNote } from "@/app/actions/notes";
+import { IconButton } from "@/lib/components/icon-picker/icon-button";
 
 /** Debounce delay in milliseconds before auto-saving. */
 const DEBOUNCE_MS = 1000;
@@ -28,6 +29,7 @@ type SaveStatus = "idle" | "saving" | "saved";
  */
 export default function NoteEditor({ note }: { note: Note }) {
   const [title, setTitle] = useState(note.title);
+  const [icon, setIcon] = useState<string | null>(note.icon);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
 
   /** Ref to hold the latest debounce timer so it can be cleared on new edits. */
@@ -107,6 +109,29 @@ export default function NoteEditor({ note }: { note: Note }) {
     scheduleSave(titleRef.current);
   }, [scheduleSave]);
 
+  /**
+   * Persists an icon change immediately. Icon edits are atomic (not
+   * keystroke-based), so skipping the debounce gives instant visual feedback
+   * and avoids racing the title/content debounce.
+   */
+  const handleIconChange = useCallback(
+    async (next: string | null) => {
+      setIcon(next);
+      setSaveStatus("saving");
+      try {
+        await updateNote(note.id, { icon: next });
+        setSaveStatus("saved");
+        if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+        savedTimerRef.current = setTimeout(() => {
+          setSaveStatus("idle");
+        }, SAVED_DISPLAY_MS);
+      } catch {
+        setSaveStatus("idle");
+      }
+    },
+    [note.id]
+  );
+
   /** Clicking the empty space below the last block should focus the editor. */
   const handleEditorContainerClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -131,11 +156,12 @@ export default function NoteEditor({ note }: { note: Note }) {
     <div className="flex h-full min-h-0 flex-col gap-4">
       {/* Title bar with icon and save indicator */}
       <div className="flex items-center gap-3">
-        {note.icon && (
-          <span className="text-3xl" role="img" aria-label="Note icon">
-            {note.icon}
-          </span>
-        )}
+        <IconButton
+          icon={icon}
+          onChange={handleIconChange}
+          size="lg"
+          ariaLabel="Change icon"
+        />
         <input
           type="text"
           value={title}

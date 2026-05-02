@@ -26,11 +26,9 @@ export default async function ReadOnlyNotePage({
     <div className="mx-auto w-full max-w-3xl px-4 py-8">
       {/* Header: icon, title, edit link */}
       <div className="mb-6 flex items-center gap-3">
-        {note.icon && (
-          <span className="text-3xl" role="img" aria-label="Note icon">
-            {note.icon}
-          </span>
-        )}
+        <span className="text-3xl" role="img" aria-label="Note icon">
+          {note.icon ?? "📄"}
+        </span>
         <h1 className="flex-1 text-2xl font-bold text-gray-900 dark:text-gray-100">
           {note.title || "Untitled"}
         </h1>
@@ -60,11 +58,9 @@ export default async function ReadOnlyNotePage({
                   href={`/n/${child.id}`}
                   className="flex items-center gap-2 rounded-md border border-gray-200 px-4 py-3 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
                 >
-                  {child.icon && (
-                    <span className="text-xl" role="img" aria-label="Note icon">
-                      {child.icon}
-                    </span>
-                  )}
+                  <span className="text-xl" role="img" aria-label="Note icon">
+                    {child.icon ?? "📄"}
+                  </span>
                   <span className="text-gray-900 dark:text-gray-100">
                     {child.title || "Untitled"}
                   </span>

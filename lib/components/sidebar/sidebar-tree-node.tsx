@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useDroppable } from "@dnd-kit/core";
 import { type NoteTreeNode as NoteTreeNodeType } from "@/lib/db/schema";
+import { IconButton } from "@/lib/components/icon-picker/icon-button";
 import { SidebarDropIndicator } from "./sidebar-drop-indicator";
 import { useDndDropState, useDndDragState } from "./sidebar-dnd-context";
 
@@ -44,7 +45,6 @@ export function SidebarTreeNode({
   const [expanded, setExpanded] = useState(true);
   const pathname = usePathname();
   const hasChildren = node.children.length > 0;
-  const displayIcon = node.icon ?? "📄";
   const isRoot = depth === 0;
   const isActive =
     pathname === `/n/${node.id}` || pathname === `/n/${node.id}/edit`;
@@ -56,12 +56,6 @@ export function SidebarTreeNode({
   const isOver = dropState.overId === node.id;
   const isDragging = dragState.activeId === node.id;
   const isDropOnTarget = isOver && dropState.position === "on";
-
-  /** Prompts the user for an emoji and updates the icon. */
-  function handleIconClick() {
-    const emoji = prompt("Enter an emoji icon (or leave empty to reset):");
-    onSetIcon(node.id, emoji || null);
-  }
 
   return (
     <div ref={setNodeRef} data-node-id={node.id}>
@@ -121,15 +115,12 @@ export function SidebarTreeNode({
           <span className="h-5 w-5 shrink-0" />
         )}
 
-        {/* Emoji icon button */}
-        <button
-          type="button"
-          aria-label="Change icon"
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-sm hover:bg-gray-100"
-          onClick={handleIconClick}
-        >
-          {displayIcon}
-        </button>
+        {/* Emoji icon button — opens an emoji picker popover */}
+        <IconButton
+          icon={node.icon}
+          onChange={(next) => onSetIcon(node.id, next)}
+          size="sm"
+        />
 
         {/* Title as navigation link */}
         <Link
